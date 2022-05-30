@@ -1,5 +1,5 @@
 #!/bin/bash
-# gem5 build shell script
+# gem5 run shell script (baseline)
 
 case $1 in
   0) bench=blackscholes;;
@@ -15,11 +15,35 @@ case $1 in
   10) bench=swaptions;;
   11) bench=vips;;
   12) bench=x264;;
-  *) echo "bad process id";; 
+  *) 
+    echo "bad process id" ;
+    exit 1;; 
 esac
 
-sim='simlarge'
+case $2 in
+  0) sim=simsmall;;
+  1) sim=simlarge;;
+  2) sim=simmedium;;
+  *) 
+    echo "bad sim option" ;
+    exit 1;; 
+esac
 
-gem5/my_scripts/fs/fs.sh ${bench} ${sim} 1
+echo "cp /staging/zpan52/parsec.tar.gz ./"
+cp /staging/zpan52/parsec.tar.gz ./
+echo "tar -xzvf parsec.tar.gz"
+tar -xzvf parsec.tar.gz
 
-tar -czf ${bench}_64_${sim}_1.tar gem5/my_STATS/${bench}_64_${sim}_1
+echo "cd gem5"
+cd gem5
+echo "my_scripts/fs/ckpt_resume.sh 64 ${bench} ${sim} 1"
+my_scripts/fs/ckpt_resume.sh 64 ${bench} ${sim} 1
+echo "cd .."
+cd ..
+
+timestamp=$(date +%Y%m%d-"%H%M%S")
+echo "tar -czf ${bench}_${sim}_64_1_$timestamp.tar gem5/my_STATS/${bench}_${sim}_64_1"
+tar -czf ${bench}_${sim}_64_1_$timestamp.tar gem5/my_STATS/${bench}_${sim}_64_1
+
+echo "rm parsec.tar.gz parsec"
+rm parsec.tar.gz parsec
