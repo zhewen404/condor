@@ -1,3 +1,4 @@
 util/router
 *pycache*
-result
+result/20*
+*.ipynb_checkpoints*
