@@ -121,7 +121,7 @@ if __name__ == "__main__":
     
     dir_ = "util/router/"
     if not os.path.exists(dir_): os.mkdir(dir_)
-    placement_name = args.file.split('/')[-1].replace('.txt','')+'_'+routing
+    placement_name = args.file.split('/')[-1].replace('.txt','')+'_'+routing + '_avg'+str(avg_hop_ct)
     name = dir_ + placement_name +'.png'
     fig.write_image(name)
     print(bcolors.OKGREEN+f'*** Written router util heatmap to {name}'+bcolors.ENDC)
