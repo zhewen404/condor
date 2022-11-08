@@ -3,3 +3,4 @@ util/router
 result/20*
 *.ipynb_checkpoints*
 util/lsh
+*err*

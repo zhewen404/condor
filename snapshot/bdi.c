@@ -347,13 +347,13 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
 int main(int argc, char *argv[]) {
     if (argc < 1) return 0;
    char* filename = argv[1];
-   // printf("%s\n", filename);
-
+   // printf("%s\n", argv[1]);
+   
    // process input file
    FILE *fp;
    fp = fopen(filename, "r");
    if (fp == NULL) {
-      perror("Failed: ");
+      perror("fopen Failed: ");
       return 1;
    }
 
