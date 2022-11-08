@@ -152,7 +152,9 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
                line_array[i].base8 = line_array[i].segs8[j];
             }
             assert(line_array[i].v8 == true);
-            if (abs(line_array[i].segs8[j] - line_array[i].base8) <= UINT8_MAX) {
+            if (((line_array[i].segs8[j] >= line_array[i].base8)?
+               (line_array[i].segs8[j] - line_array[i].base8) : 
+               (line_array[i].base8 - line_array[i].segs8[j])) <= UINT8_MAX) {
                line_array[i].b8d1 += 1;
             }
             else {
@@ -182,7 +184,9 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
                   line_array[i].base4 = line_array[i].segs4[j];
                }
                assert(line_array[i].v4 == true);
-               if (abs(line_array[i].segs4[j] - line_array[i].base4) <= UINT8_MAX) {
+               if (((line_array[i].segs4[j] >= line_array[i].base4)?
+               (line_array[i].segs4[j] - line_array[i].base4) : 
+               (line_array[i].base4 - line_array[i].segs4[j])) <= UINT8_MAX) {
                   line_array[i].b4d1 += 1;
                }
                else {
@@ -216,7 +220,9 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
                   line_array[i].base8 = line_array[i].segs8[j];
                }
                assert(line_array[i].v8 == true);
-               if (abs(line_array[i].segs8[j] - line_array[i].base8) <= UINT16_MAX) {
+               if (((line_array[i].segs8[j] >= line_array[i].base8)?
+               (line_array[i].segs8[j] - line_array[i].base8) : 
+               (line_array[i].base8 - line_array[i].segs8[j])) <= UINT16_MAX) {
                   line_array[i].b8d2 += 2;
                }
                else {
@@ -251,7 +257,9 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
                   line_array[i].base2 = line_array[i].segs2[j];
                }
                assert(line_array[i].v2 == true);
-               if (abs(line_array[i].segs2[j] - line_array[i].base2) <= UINT8_MAX) {
+               if (((line_array[i].segs2[j] >= line_array[i].base2)?
+               (line_array[i].segs2[j] - line_array[i].base2) : 
+               (line_array[i].base2 - line_array[i].segs2[j])) <= UINT8_MAX) {
                   line_array[i].b2d1 += 1;
                }
                else {
@@ -287,7 +295,9 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
                   line_array[i].base4 = line_array[i].segs4[j];
                }
                assert(line_array[i].v4 == true);
-               if (abs(line_array[i].segs4[j] - line_array[i].base4) <= UINT16_MAX) {
+               if (((line_array[i].segs4[j] >= line_array[i].base4)?
+               (line_array[i].segs4[j] - line_array[i].base4) : 
+               (line_array[i].base4 - line_array[i].segs4[j])) <= UINT16_MAX) {
                   line_array[i].b4d2 += 2;
                }
                else {
@@ -324,7 +334,9 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
                   line_array[i].base8 = line_array[i].segs8[j];
                }
                assert(line_array[i].v8 == true);
-               if (abs(line_array[i].segs8[j] - line_array[i].base8) <= UINT32_MAX) {
+               if (((line_array[i].segs8[j] >= line_array[i].base8)?
+               (line_array[i].segs8[j] - line_array[i].base8) : 
+               (line_array[i].base8 - line_array[i].segs8[j])) <= UINT32_MAX) {
                   line_array[i].b8d4 += 4;
                }
                else {
@@ -347,8 +359,17 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
 int main(int argc, char *argv[]) {
    if (argc < 1) return 0;
    char filename[256];
-   char* suf = "/board.cache_hierarchy.l2cache.tags.cache";
+   char filename_l1i[256];
+   char filename_l1d[256];
+   char filename_l2[256];
+   char suf[] = "/board.cache_hierarchy.l2cache.tags.cache";
+   char suf_tag_l1i[] = "/board.cache_hierarchy.l1icache.tags.addr";
+   char suf_tag_l1d[] = "/board.cache_hierarchy.l1dcache.tags.addr";
+   char suf_tag_l2[] = "/board.cache_hierarchy.l2cache.tags.addr";
    snprintf(filename, sizeof(filename), "%s%s", argv[1], suf);
+   snprintf(filename_l1i, sizeof(filename_l1i), "%s%s", argv[1], suf_tag_l1i);
+   snprintf(filename_l1d, sizeof(filename_l1d), "%s%s", argv[1], suf_tag_l1d);
+   snprintf(filename_l2, sizeof(filename_l2), "%s%s", argv[1], suf_tag_l2);
    // printf("%s\n", filename);
    
    // process input file
@@ -366,7 +387,7 @@ int main(int argc, char *argv[]) {
    unsigned numLine = numByte/lineSize;
    printf("numLine=%d, lineSize=%d\n", numLine, lineSize);
    fclose(fp);
-   struct Line* line_array = malloc(numLine * sizeof(struct Line));
+   struct Line* line_array = (Line*) malloc(numLine * sizeof(struct Line));
    
    bdi(line_array, lineSize, p, numLine);
    

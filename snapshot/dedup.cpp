@@ -100,7 +100,7 @@ void dedup(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned nu
 int main(int argc, char *argv[]) {
    if (argc < 1) return 0;
    char filename[256];
-   char* suf = "/board.cache_hierarchy.l2cache.tags.cache";
+   char suf[] = "/board.cache_hierarchy.l2cache.tags.cache";
    snprintf(filename, sizeof(filename), "%s%s", argv[1], suf);
 //    printf("%s\n", filename);
    
@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
    unsigned numLine = numByte/lineSize;
    printf("numLine=%d, lineSize=%d\n", numLine, lineSize);
    fclose(fp);
-   struct Line* line_array = malloc(numLine * sizeof(struct Line));
+   struct Line* line_array = (Line*) malloc(numLine * sizeof(struct Line));
    
    dedup(line_array, lineSize, p, numLine);
    

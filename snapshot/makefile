@@ -1,6 +1,6 @@
-bdi: bdi.c
-	gcc -o bdi bdi.c
-dedup: dedup.c
-	gcc -o dedup dedup.c -lm
+bdi: bdi.cpp
+	g++ -o bdi bdi.cpp
+dedup: dedup.cpp
+	g++ -o dedup dedup.cpp -lm
 clean:
 	rm bdi dedup
