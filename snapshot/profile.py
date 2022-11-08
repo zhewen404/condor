@@ -49,7 +49,7 @@ for scheme in ["bdi", "dedup"]:
         for i in range(num_sample):
             i = i + 1
             data_file = gem5_dir + result_dir + \
-                f"/{args.bench_num}/null/{no_ckpt}/{i*unit}/board.cache_hierarchy.l2cache.tags.cache"
+                f"/{args.bench_num}/null/{no_ckpt}/{i*unit}"
             if not os.path.isfile(data_file): 
                 print(f"data file not exist! {data_file}")
                 exit(1)

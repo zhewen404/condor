@@ -98,9 +98,11 @@ void dedup(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned nu
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 1) return 0;
-   char* filename = argv[1];
-   // printf("%s\n", argv[1]);
+   if (argc < 1) return 0;
+   char filename[256];
+   char* suf = "/board.cache_hierarchy.l2cache.tags.cache";
+   snprintf(filename, sizeof(filename), "%s%s", argv[1], suf);
+//    printf("%s\n", filename);
    
    // process input file
    FILE *fp;
