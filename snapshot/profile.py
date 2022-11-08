@@ -50,11 +50,11 @@ for scheme in ["bdi", "dedup"]:
             i = i + 1
             data_file = gem5_dir + result_dir + \
                 f"/{args.bench_num}/null/{no_ckpt}/{i*unit}"
-            if not os.path.isfile(data_file): 
-                print(f"data file not exist! {data_file}")
+            if not os.path.isdir(data_file): 
+                print(f"data dir not exist! {data_file}")
                 exit(1)
             cmd_list = [f"./{scheme}"] + [data_file]
-            with open(f"err/{args.bench_num}-{i}.err","wb") as err:
+            with open(f"err/{args.bench_num}-{no_ckpt}.{i}.{scheme}","wb") as err:
             # with open(f"log/{args.bench_num}-{i}.log","wb") as out, open(f"err/{args.bench_num}-{i}.err","wb") as err:
                 p = subprocess.Popen(cmd_list, shell=False, stdout=subprocess.PIPE, stderr=err)
                 print(bcolors.OKGREEN + f'{bench_name} [{i}] Launched:  ' + bcolors.ENDC + f"{scheme}")
