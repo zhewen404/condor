@@ -95,12 +95,13 @@ void init_line_data(struct Line* line_array, unsigned lineSize, u_int8_t * p, un
       line_array[i].segs8 = (uint64_t *) malloc(lineSize/base * sizeof(uint64_t));
       for (unsigned js = 0; js < lineSize/base; js++) {
          u_int64_t p_seg = 0; 
-         for (unsigned j = 0; j < base; j++) {
-            p_seg = p_seg << base;
-            p_seg += p[i*lineSize + js *base + j];
+         for (unsigned j = 0; j < base-1; j++) {
+            p_seg += p[i*lineSize + js * base + j];
+            p_seg = p_seg << 8;
          }
+         p_seg += p[i*lineSize + js * base + base - 1];
          line_array[i].segs8[js] = p_seg;
-         // printf("%"PRIu64" ", line_array[i].segs8[js]);
+         // printf("%" PRIu64 " ", line_array[i].segs8[js]);
       }
       // printf("\n");
 
@@ -108,10 +109,11 @@ void init_line_data(struct Line* line_array, unsigned lineSize, u_int8_t * p, un
       line_array[i].segs4 = (uint32_t *) malloc(lineSize/base * sizeof(uint32_t));
       for (unsigned js = 0; js < lineSize/base; js++) {
          u_int32_t p_seg = 0; 
-         for (unsigned j = 0; j < base; j++) {
-            p_seg = p_seg << base;
+         for (unsigned j = 0; j < base-1; j++) {
             p_seg += p[i*lineSize + js *base + j];
+            p_seg = p_seg << 8;
          }
+         p_seg += p[i*lineSize + js * base + base - 1];
          line_array[i].segs4[js] = p_seg;
          // printf("%" PRIu32 "\n", line_array[i].segs4[js]);
       }
@@ -120,10 +122,11 @@ void init_line_data(struct Line* line_array, unsigned lineSize, u_int8_t * p, un
       line_array[i].segs2 = (uint16_t *) malloc(lineSize/base * sizeof(uint16_t));
       for (unsigned js = 0; js < lineSize/base; js++) {
          u_int16_t p_seg = 0; 
-         for (unsigned j = 0; j < base; j++) {
-            p_seg = p_seg << base;
+         for (unsigned j = 0; j < base-1; j++) {
             p_seg += p[i*lineSize + js *base + j];
+            p_seg = p_seg << 8;
          }
+         p_seg += p[i*lineSize + js * base + base - 1];
          line_array[i].segs2[js] = p_seg;
          // printf("%" PRIu16 "\n", line_array[i].segs2[js]);
       }
@@ -392,12 +395,12 @@ void bdi(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numL
 
 unsigned countSetBits(uint64_t n)
 {
-    unsigned count = 0;
-    while (n != 0) {
-        count += n & 1;
-        n >>= 1;
-    }
-    return count;
+   unsigned count = 0;
+   while (n != 0) {
+      count += n & 1;
+      n = n >> 1;
+   }
+   return count;
 }
 
 void xor_preprocess(struct Line* line_array, unsigned lineSize, 
@@ -481,19 +484,22 @@ void xor_preprocess(struct Line* line_array, unsigned lineSize,
             unsigned min_ham = lineSize*8 + 1;
             unsigned best_cand_ind = numLine + 1;
             for (unsigned ind = 0; ind < numLine; ind++) {
+               if (line_array[ind].cachedAbove == true ||
+                  line_array[ind].xored == true) continue;
                unsigned ham = 0;
                for (unsigned js = 0; js < lineSize/8; js++) {
                   uint64_t temp8 = line_array[ind].segs8[js] ^ line_array[i].segs8[js];
                   ham += countSetBits(temp8);
+                  // printf("temp8=%" PRIu64 " ham=%d\n", temp8, ham);
                }
-               if (ham < min_ham && 
-                  line_array[ind].cachedAbove == false &&
-                  line_array[ind].xored == false) {
+               // printf("i=%d, ham[%d]=%d\n", i, ind, ham);
+               // exit(1);
+               if (ham < min_ham) {
                   min_ham = ham;
                   best_cand_ind = ind;
                }               
             }
-            // printf("min ham[%d]=%d\n", best_cand_ind, min_ham);
+            // printf("i=%d,min ham[%d]=%d\n", i, best_cand_ind, min_ham);
             
             for (unsigned js = 0; js < lineSize/8; js++) {
                uint64_t temp8 = line_array[best_cand_ind].segs8[js] ^ line_array[i].segs8[js];
