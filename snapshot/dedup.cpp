@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <string.h>
 #include <math.h>
+typedef unsigned count_t;
 
 struct Line {
    uint16_t dedup_hash;
@@ -14,6 +15,8 @@ struct Line {
    bool unique;
    bool cachedAbove;
    bool xored;
+   bool inter_vanish; // this line should vanish when counting inter compression
+
 } line;  
 
 u_int8_t * read_file(unsigned *size, FILE * file) //Don't forget to free retval after use
@@ -174,26 +177,33 @@ void xor_preprocess(struct Line* line_array, unsigned lineSize,
          }
       }
    }
-   printf("ct=%d\n", ct);
-   //cached above lines are too many!
-   assert(ct <= numLine/2);
+   printf("ct=%d,", ct);
+   // //cached above lines are too many!
+   // assert(ct <= numLine/2);
+   count_t max_xor_ct_half = ct > (numLine-ct) ? numLine-ct : ct;
+   count_t max_xor_ct = 2 * max_xor_ct_half;
+   printf("max xor_ct = %d\n", max_xor_ct);
 
+   count_t xor_ct = 0;
    // second pass: for every line cached above
    // 1. xor with another block and modify data
    for(unsigned i = 0; i < numLine; i++) {
+      if (xor_ct == max_xor_ct) break; // all possible xor done
+      if (line_array[i].xored == true) continue;
       // perform xor
       if (line_array[i].cachedAbove) {
          unsigned ind;
          if (do_xor == 1) {
-            // rand xor
-            // printf("using rand xor\n");
+         // ****** rand xor ****** //
             do {
                ind = rand() % numLine;
-            } while(ind != i && 
-               line_array[ind].cachedAbove == false && 
-               line_array[ind].xored == false);
+            } while(ind == i || 
+               line_array[ind].cachedAbove == true || 
+               line_array[ind].xored == true);
             line_array[ind].xored = true;
             line_array[i].xored = true;
+            xor_ct += 2;
+            line_array[i].inter_vanish = false;
             // printf("[%d] ^ [%d]\n", i, ind);
 
             for (unsigned js = 0; js < lineSize/2; js++) {
@@ -204,13 +214,13 @@ void xor_preprocess(struct Line* line_array, unsigned lineSize,
             
          }
          else if (do_xor == 2) {
-            // printf("using ideal xor\n");
             // ideal xor
             unsigned min_ham = lineSize*8 + 1;
             unsigned best_cand_ind = numLine + 1;
             for (unsigned ind = 0; ind < numLine; ind++) {
                if (line_array[ind].cachedAbove == true ||
-                  line_array[ind].xored == true) continue;
+                  line_array[ind].xored == true ||
+                  i == ind) continue;
                unsigned ham = 0;
                for (unsigned js = 0; js < lineSize/2; js++) {
                   uint16_t temp2 = line_array[ind].segs2[js] ^ line_array[i].segs2[js];
@@ -232,7 +242,9 @@ void xor_preprocess(struct Line* line_array, unsigned lineSize,
                line_array[i].segs2[js] = temp2;
             }
             line_array[best_cand_ind].xored = true;
+            line_array[best_cand_ind].inter_vanish = false;
             line_array[i].xored = true;
+            xor_ct += 2;
          }
          else {
             assert(false);
@@ -361,11 +373,15 @@ int main(int argc, char *argv[]) {
    
    // for every line:print
    unsigned tot_size = 0;
+   unsigned inter_gain = 0;
    for(unsigned i = 0; i < numLine; i++) {
       tot_size += line_array[i].dedup_size;
+      if (line_array[i].inter_vanish) inter_gain += line_array[i].dedup_size;
    }
    double cr = (double)(numLine*lineSize)/tot_size;
    printf("total size = %d/%d (%f)\n", tot_size, numLine*lineSize, cr);
+   double cr_both = (double)(numLine*lineSize)/(tot_size-inter_gain);
+   printf("intra+inter = %d/%d  {%f}\n", tot_size-inter_gain, numLine*lineSize, cr_both);
 
    // free up mem
    free(p);

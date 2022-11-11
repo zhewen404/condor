@@ -409,7 +409,7 @@ unsigned countSetBits(uint64_t n)
 
 void xor_preprocess_unconstrained(struct Line* line_array, unsigned lineSize, 
    u_int8_t * p, unsigned numLine, unsigned do_xor) {
-      count_t xor_ct = 0;
+   count_t xor_ct = 0;
    // for every line
    // xor with another block and modify data
    for(unsigned i = 0; i < numLine; i++) {
@@ -518,17 +518,8 @@ int main(int argc, char *argv[]) {
    }
 
    char filename[256];
-   char filename_l1i[256];
-   char filename_l1d[256];
-   char filename_l2[256];
    char suf[] = "/board.cache_hierarchy.l2cache.tags.cache";
-   char suf_tag_l1i[] = "/board.cache_hierarchy.l1icaches.tags.addr";
-   char suf_tag_l1d[] = "/board.cache_hierarchy.l1dcaches.tags.addr";
-   char suf_tag_l2[] = "/board.cache_hierarchy.l2cache.tags.addr";
    snprintf(filename, sizeof(filename), "%s%s", argv[1], suf);
-   snprintf(filename_l1i, sizeof(filename_l1i), "%s%s", argv[1], suf_tag_l1i);
-   snprintf(filename_l1d, sizeof(filename_l1d), "%s%s", argv[1], suf_tag_l1d);
-   snprintf(filename_l2, sizeof(filename_l2), "%s%s", argv[1], suf_tag_l2);
    // printf("%s\n", filename);
    
    // process input file
@@ -570,16 +561,6 @@ int main(int argc, char *argv[]) {
    unsigned tot_size = 0;
    unsigned inter_gain = 0;
    for(unsigned i = 0; i < numLine; i++) {
-      // printf("line#%d: ", i);
-
-      // for (unsigned js = 0; js < lineSize/8; js++) {
-         // printf("%"PRIu64" ", line_array[i].segs8[js]);
-      // }
-      // printf("\n");
-      // printf("size=%d (zero=%d, rep=%d, b8d1=%d, b4d1=%d, b8d2=%d, b2d1=%d, d4b2=%d, b8d4=%d)\n", 
-      //    line_array[i].size, line_array[i].zero, line_array[i].rep,
-      //    line_array[i].b8d1, line_array[i].b4d1, line_array[i].b8d2,
-      //    line_array[i].b2d1, line_array[i].b4d2, line_array[i].b8d4);
       tot_size += line_array[i].size;
       if (line_array[i].inter_vanish) inter_gain += line_array[i].size;
    }
@@ -590,8 +571,6 @@ int main(int argc, char *argv[]) {
 
    // free up mem
    free(p);
-   if (do_xor == 1 || do_xor == 2) {
-   }
    for (int i=0; i < numLine; i++) {
       free(line_array[i].segs8);
       free(line_array[i].segs4);
