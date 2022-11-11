@@ -19,7 +19,6 @@ struct Line {
    bool v8;
    bool v4;
    bool v2;
-   bool cachedAbove;
    bool xored;
    bool inter_vanish; // this line should vanish when counting inter compression
 
@@ -52,26 +51,6 @@ u_int8_t * read_file(unsigned *size, FILE * file) //Don't forget to free retval 
    while (fscanf(file, "%d ", &val) == 1)
    {
       retval[pos++] = (unsigned char) val;
-   }
-   return retval;
-}
-
-uint64_t * read_tag(unsigned *size, FILE * file) //Don't forget to free retval after use
-{
-   *size = 0;
-   uint64_t val;
-   int startpos = ftell(file);
-   while (fscanf(file, "%lx ", &val) == 1)
-   {
-      *size += 1;
-   }
-   // printf("%d\n", *size);
-   uint64_t * retval = (uint64_t *) malloc(sizeof(uint64_t)*(*size));
-   fseek(file, startpos, SEEK_SET); //if the file was not on the beginning when we started
-   int pos = 0;
-   while (fscanf(file, "%lx ", &val) == 1)
-   {
-      retval[pos++] = (uint64_t) val;
    }
    return retval;
 }
@@ -428,142 +407,98 @@ unsigned countSetBits(uint64_t n)
    return count;
 }
 
-void xor_preprocess(struct Line* line_array, unsigned lineSize, 
-   u_int8_t * p, unsigned numLine, 
-   uint64_t * p_l1i_tag, unsigned numLine_l1i,
-   uint64_t * p_l1d_tag, unsigned numLine_l1d,
-   uint64_t * p_l2_tag, unsigned do_xor) {
-   // printf("calling %s\n", __func__);
-   // first pass: for every line
-   // 1. find if exists in L1
-   unsigned ct = 0;
+void xor_preprocess_unconstrained(struct Line* line_array, unsigned lineSize, 
+   u_int8_t * p, unsigned numLine, unsigned do_xor) {
+      count_t xor_ct = 0;
+   // for every line
+   // xor with another block and modify data
    for(unsigned i = 0; i < numLine; i++) {
-      line_array[i].cachedAbove = false;
-      line_array[i].xored = false;
-      // read l2 tag
-      uint64_t l2_addr = p_l2_tag[i];
-      // search in l1i
-      for (unsigned l1i = 0; l1i < numLine_l1i; l1i++) {
-         if(l2_addr == p_l1i_tag[l1i]) {
-            line_array[i].cachedAbove = true;
-            ct++;
-            // printf("l2 line is cached in l1i!\n");
-            break;
-         }
-      }
-      // search in l1d
-      if (!line_array[i].cachedAbove) {
-         for (unsigned l1d = 0; l1d < numLine_l1d; l1d++) {
-            if(l2_addr == p_l1d_tag[l1d]) {
-               line_array[i].cachedAbove = true;
-               ct++;
-               // printf("l2 line is cached in l1d!\n");
-               break;
-            }
-         }
-      }
-   }
-   printf("ct=%d,", ct);
-   // //cached above lines are too many!
-   // assert(ct <= numLine/2);
-   count_t max_xor_ct_half = ct > (numLine-ct) ? numLine-ct : ct;
-   count_t max_xor_ct = 2 * max_xor_ct_half;
-   printf("max xor_ct = %d\n", max_xor_ct);
-
-   count_t xor_ct = 0;
-   // second pass: for every line cached above
-   // 1. xor with another block and modify data
-   for(unsigned i = 0; i < numLine; i++) {
-      if (xor_ct == max_xor_ct) break; // all possible xor done
+      if (xor_ct == numLine-(numLine%2)) break; // all possible xor done
       if (line_array[i].xored == true) continue;
       // perform xor
-      if (line_array[i].cachedAbove) {
-         unsigned ind;
-         if (do_xor == 1) {
+      unsigned ind;
+      if (do_xor == 1) {
          // ****** rand xor ****** //
-            do {
-               ind = rand() % numLine;
-            } while(ind == i || 
-               line_array[ind].cachedAbove == true || 
-               line_array[ind].xored == true);
-            line_array[ind].xored = true;
-            line_array[i].xored = true;
-            xor_ct += 2;
-            line_array[i].inter_vanish = true;
-            // printf("[%d] ^ [%d]\n", i, ind);
+         do {
+            ind = rand() % numLine;
+            // printf("rand=%d\n", ind);
+         } while(ind == i || 
+            line_array[ind].xored == true);
+         line_array[ind].xored = true;
+         line_array[i].xored = true;
+         xor_ct += 2;
+         line_array[ind].inter_vanish = true;
+         // printf("[%d] ^ [%d]\n", i, ind);
 
+         for (unsigned js = 0; js < lineSize/8; js++) {
+            uint64_t temp8 = line_array[ind].segs8[js] ^ line_array[i].segs8[js];
+            line_array[ind].segs8[js] = temp8;
+            line_array[i].segs8[js] = temp8;
+            // printf("%" PRIu32 "\n", temp8);
+         }
+         for (unsigned js = 0; js < lineSize/4; js++) {
+            uint32_t temp4 = line_array[ind].segs4[js] ^ line_array[i].segs4[js];
+            line_array[ind].segs4[js] = temp4;
+            line_array[i].segs4[js] = temp4;
+         }
+         for (unsigned js = 0; js < lineSize/2; js++) {
+            uint16_t temp2 = line_array[ind].segs2[js] ^ line_array[i].segs2[js];
+            line_array[ind].segs2[js] = temp2;
+            line_array[i].segs2[js] = temp2;
+         }
+         
+      }
+      else if (do_xor == 2) {
+         // ideal xor
+         unsigned min_ham = lineSize*8 + 1;
+         unsigned best_cand_ind = numLine + 1;
+         for (unsigned ind = 0; ind < numLine; ind++) {
+            if (line_array[ind].xored == true || i == ind) continue;
+            unsigned ham = 0;
             for (unsigned js = 0; js < lineSize/8; js++) {
                uint64_t temp8 = line_array[ind].segs8[js] ^ line_array[i].segs8[js];
-               line_array[ind].segs8[js] = temp8;
-               line_array[i].segs8[js] = temp8;
-               // printf("%" PRIu32 "\n", temp8);
+               ham += countSetBits(temp8);
+               // printf("temp8=%" PRIu64 " ham=%d\n", temp8, ham);
             }
-            for (unsigned js = 0; js < lineSize/4; js++) {
-               uint32_t temp4 = line_array[ind].segs4[js] ^ line_array[i].segs4[js];
-               line_array[ind].segs4[js] = temp4;
-               line_array[i].segs4[js] = temp4;
-            }
-            for (unsigned js = 0; js < lineSize/2; js++) {
-               uint16_t temp2 = line_array[ind].segs2[js] ^ line_array[i].segs2[js];
-               line_array[ind].segs2[js] = temp2;
-               line_array[i].segs2[js] = temp2;
-            }
-            
+            // printf("i=%d, ham[%d]=%d\n", i, ind, ham);
+            // exit(1);
+            if (ham < min_ham) {
+               min_ham = ham;
+               best_cand_ind = ind;
+            }               
          }
-         else if (do_xor == 2) {
-            // ideal xor
-            unsigned min_ham = lineSize*8 + 1;
-            unsigned best_cand_ind = numLine + 1;
-            for (unsigned ind = 0; ind < numLine; ind++) {
-               if (line_array[ind].cachedAbove == true ||
-                  line_array[ind].xored == true ||
-                  i == ind) continue;
-               unsigned ham = 0;
-               for (unsigned js = 0; js < lineSize/8; js++) {
-                  uint64_t temp8 = line_array[ind].segs8[js] ^ line_array[i].segs8[js];
-                  ham += countSetBits(temp8);
-                  // printf("temp8=%" PRIu64 " ham=%d\n", temp8, ham);
-               }
-               // printf("i=%d, ham[%d]=%d\n", i, ind, ham);
-               // exit(1);
-               if (ham < min_ham) {
-                  min_ham = ham;
-                  best_cand_ind = ind;
-               }               
-            }
-            // printf("i=%d,min ham[%d]=%d\n", i, best_cand_ind, min_ham);
-            
-            for (unsigned js = 0; js < lineSize/8; js++) {
-               uint64_t temp8 = line_array[best_cand_ind].segs8[js] ^ line_array[i].segs8[js];
-               line_array[best_cand_ind].segs8[js] = temp8;
-               line_array[i].segs8[js] = temp8;
-               // printf("%" PRIu32 "\n", temp8);
-            }
-            for (unsigned js = 0; js < lineSize/4; js++) {
-               uint32_t temp4 = line_array[best_cand_ind].segs4[js] ^ line_array[i].segs4[js];
-               line_array[best_cand_ind].segs4[js] = temp4;
-               line_array[i].segs4[js] = temp4;
-            }
-            for (unsigned js = 0; js < lineSize/2; js++) {
-               uint16_t temp2 = line_array[best_cand_ind].segs2[js] ^ line_array[i].segs2[js];
-               line_array[best_cand_ind].segs2[js] = temp2;
-               line_array[i].segs2[js] = temp2;
-            }
-            line_array[best_cand_ind].xored = true;
-            line_array[best_cand_ind].inter_vanish = true;
-            line_array[i].xored = true;
-            xor_ct += 2;
+         // printf("i=%d,min ham[%d]=%d\n", i, best_cand_ind, min_ham);
+         
+         for (unsigned js = 0; js < lineSize/8; js++) {
+            uint64_t temp8 = line_array[best_cand_ind].segs8[js] ^ line_array[i].segs8[js];
+            line_array[best_cand_ind].segs8[js] = temp8;
+            line_array[i].segs8[js] = temp8;
+            // printf("%" PRIu32 "\n", temp8);
          }
-         else {
-            assert(false);
+         for (unsigned js = 0; js < lineSize/4; js++) {
+            uint32_t temp4 = line_array[best_cand_ind].segs4[js] ^ line_array[i].segs4[js];
+            line_array[best_cand_ind].segs4[js] = temp4;
+            line_array[i].segs4[js] = temp4;
          }
+         for (unsigned js = 0; js < lineSize/2; js++) {
+            uint16_t temp2 = line_array[best_cand_ind].segs2[js] ^ line_array[i].segs2[js];
+            line_array[best_cand_ind].segs2[js] = temp2;
+            line_array[i].segs2[js] = temp2;
+         }
+         line_array[best_cand_ind].xored = true;
+         line_array[best_cand_ind].inter_vanish = true;
+         line_array[i].xored = true;
+         xor_ct += 2;
+      }
+      else {
+         assert(false);
       }
    }
 }
 
 int main(int argc, char *argv[]) {
    if (argc < 3) {
-      printf("./bdi dir do_xor\n");
+      printf("./bdiuc dir do_xor\n");
       return 1;
    }
 
@@ -617,58 +552,10 @@ int main(int argc, char *argv[]) {
    }
    struct Line* line_array = (Line*) malloc(numLine * sizeof(struct Line));
    
-   uint64_t * p_l2_tag;
-   uint64_t * p_l1i_tag;
-   uint64_t * p_l1d_tag;
    if (do_xor == 1 || do_xor == 2) {
-      // read l2 tag
-      FILE *fp_l2_tag;
-      fp_l2_tag = fopen(filename_l2, "r");
-      if (fp_l2_tag == NULL) {
-         perror("fopen l2 tag Failed: ");
-         return 1;
-      }
-      unsigned size_l2_tag = 0;
-      p_l2_tag = read_tag(&size_l2_tag, fp_l2_tag);
-      fclose(fp_l2_tag);
-      if (size_l2_tag == 0) {
-         printf("no valid addr in L2!\n");
-         return 1;
-      }
-
-      // read l1d tag
-      FILE *fp_l1d_tag;
-      fp_l1d_tag = fopen(filename_l1d, "r");
-      if (fp_l1d_tag == NULL) {
-         perror("fopen l1d tag Failed: ");
-         return 1;
-      }
-      unsigned size_l1d_tag = 0;
-      p_l1d_tag = read_tag(&size_l1d_tag, fp_l1d_tag);
-      fclose(fp_l1d_tag);
-      if (size_l1d_tag == 0) {
-         printf("no valid addr in L1d!\n");
-         return 1;
-      }
-      // read l1i tag
-      FILE *fp_l1i_tag;
-      fp_l1i_tag = fopen(filename_l1i, "r");
-      if (fp_l1i_tag == NULL) {
-         perror("fopen l1i tag Failed: ");
-         return 1;
-      }
-      unsigned size_l1i_tag = 0;
-      p_l1i_tag = read_tag(&size_l1i_tag, fp_l1i_tag);
-      fclose(fp_l1i_tag);
-      if (size_l1i_tag == 0) {
-         printf("no valid addr in L1i!\n");
-         return 1;
-      }
-
       init_line_data(line_array, lineSize, p, numLine);
       // xor preprocess
-      xor_preprocess(line_array, lineSize, p, numLine, 
-         p_l1i_tag, size_l1i_tag, p_l1d_tag, size_l1d_tag, p_l2_tag,
+      xor_preprocess_unconstrained(line_array, lineSize, p, numLine, 
          do_xor);
       // bdi compression
       bdi(line_array, lineSize, p, numLine, do_xor);
@@ -704,9 +591,6 @@ int main(int argc, char *argv[]) {
    // free up mem
    free(p);
    if (do_xor == 1 || do_xor == 2) {
-      free(p_l2_tag);
-      free(p_l1i_tag);
-      free(p_l1d_tag);
    }
    for (int i=0; i < numLine; i++) {
       free(line_array[i].segs8);
