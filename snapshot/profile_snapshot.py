@@ -8,6 +8,7 @@ from util.spec2017_util import (
 )
 import argparse, subprocess, os, re
 from tqdm import tqdm
+from scipy.stats import gmean
 
 parser = argparse.ArgumentParser(description="config.")
 parser.add_argument(
@@ -33,15 +34,20 @@ num_ckpt = len(glob(os.path.join(ckpt, "cpt.*", "")))
 print(f"spec {args.bench_num}.{bench_name} contains {num_ckpt} ckpts.")
 # exit(1)
 
-result_dir = "/m5out_spec_dump_cache"
+result_dir = "/m5out_spec_dump_cache_2_to_1"
 unit = 10000000
 num_sample = 10
-log_dir = os.getcwd() + '/out/'
+out_dir = os.getcwd() + '/out/'
+log_dir = os.getcwd() + '/log/'
 err_dir = os.getcwd() + '/err/'
-create_folder(log_dir)
+create_folder(out_dir)
 create_folder(err_dir)
+create_folder(log_dir)
 
-for scheme in tqdm(["bdi", "dedup"], desc="compression scheme", leave=True):
+f_time_pf = open(log_dir+f"/{bench_name}.time", "w+")
+f_time_pf_both = open(log_dir+f"/{bench_name}.time_both", "w+")
+
+for scheme in tqdm(["bdi", "dedup", "bdiuc", "dedupuc"], desc="compression scheme", leave=True):
     # check binary exists
     if not os.path.isfile(f"{scheme}"): 
         print(bcolors.RED + f"{scheme} binary file not exist!" + bcolors.ENDC)
@@ -49,6 +55,7 @@ for scheme in tqdm(["bdi", "dedup"], desc="compression scheme", leave=True):
     num_snapshots=[]
     for xor_scheme in tqdm(["none", "rand", "ideal"], desc="xor scheme", leave=False):
         cr = []
+        cr_both =[]
         for no_ckpt in tqdm(range(num_ckpt), desc="check point", leave=False):
             for i in range(num_sample):
                 i = i + 1
@@ -58,8 +65,6 @@ for scheme in tqdm(["bdi", "dedup"], desc="compression scheme", leave=True):
                     print(bcolors.RED + f"data dir not exist! {data_file}" + bcolors.ENDC)
                     continue
                 cmd_list = [f"./{scheme}"] + [data_file] + [xor_scheme]
-                # with open(f"err/{args.bench_num}-{no_ckpt}.{i}.{scheme}_{xor_scheme}","wb") as err:
-                # with open(f"log/{args.bench_num}-{i}.log","wb") as out, open(f"err/{args.bench_num}-{i}.err","wb") as err:
                 p = subprocess.Popen(cmd_list, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 print(bcolors.OKGREEN + f'{bench_name} [{no_ckpt}.{i}] Launched:  ' + bcolors.ENDC + f"{scheme}+{xor_scheme}")
                 # print(f'{p.args}')
@@ -74,13 +79,34 @@ for scheme in tqdm(["bdi", "dedup"], desc="compression scheme", leave=True):
                     ferr.close()
                 else:
                     cr_ = float(out.split('(')[-1].split(')')[0])
+                    cr_both_ = float(out.split('{')[-1].split('}')[0])
                     print(cr_)
                     cr.append(cr_)
+                    cr_both.append(cr_both_)
             # exit(1)
-        cr_avg = sum(cr)/len(cr)
+        cr_arith = sum(cr)/len(cr)
+        cr_geo = gmean(cr)
         num_snapshots.append(len(cr))
         print(f"total {len(cr)} snapshots.")
-        f = open(log_dir+f"/{bench_name}.{scheme}_{xor_scheme}", "w")
-        f.write(f"{cr_avg}, {len(cr)}")
+
+        # write means and #snapshots to output
+        f = open(out_dir+f"/{bench_name}.{scheme}_{xor_scheme}", "w")
+        f.write(f"{cr_arith}, {cr_geo}, {len(cr)}")
         f.close()
+
+        cr_arith_both = sum(cr_both)/len(cr_both)
+        cr_geo_both = gmean(cr_both)
+        f_both = open(out_dir+f"/{bench_name}.{scheme}_{xor_scheme}_both", "w")
+        f_both.write(f"{cr_arith_both}, {cr_geo_both}, {len(cr_both)}")
+        f_both.close()
+
+        # write time elaps profile to log
+        for i in range(len(cr)): f_time_pf.write(f"{cr[i]} ")
+        f_time_pf.write("\n")
+        for i in range(len(cr_both)): f_time_pf_both.write(f"{cr_both[i]} ")
+        f_time_pf_both.write("\n")
+
     print(num_snapshots)
+
+f_time_pf.close()
+f_time_pf_both.close()
