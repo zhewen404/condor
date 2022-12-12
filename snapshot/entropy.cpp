@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <string.h>
 #include <math.h>
+#include <map>
 typedef unsigned count_t;
 
 struct Line {
@@ -82,35 +83,6 @@ void init_line_data(struct Line* line_array, unsigned lineSize, u_int8_t * p, un
    }
 
 }
-void dedup(struct Line* line_array, unsigned lineSize, u_int8_t * p, unsigned numLine) {
-   // for every line
-   unsigned base=2;
-   unsigned num = lineSize/base;
-   for(unsigned i = 0; i < numLine; i++) {
-      // try compression
-      // check every previous line
-      for (unsigned j = 0; j < i; j++) {
-        bool equal = true;
-        //check equal
-        for (unsigned js = 0; js < num; js++) {
-            if (line_array[i].segs2[js] != line_array[j].segs2[js]) {
-                // i j not equal
-                equal = false;
-                break;
-            }
-        }
-        if (equal == true) {
-            line_array[i].dedup_size = 0;
-            line_array[j].unique = true;
-            break;
-        }
-        else {
-            line_array[i].dedup_size = lineSize;
-        }
-      }
-      
-   }
-}
 
 unsigned countSetBits(uint16_t n)
 {
@@ -184,41 +156,82 @@ void xor_preprocess_unconstrained(struct Line* line_array, unsigned lineSize,
          line_array[i].xored = true;
          xor_ct += 2;
       }
-      else if (do_xor == 3) {
-         // worst xor
-         int max_ham = -1;
-         unsigned best_cand_ind = numLine + 1;
-         for (unsigned ind = 0; ind < numLine; ind++) {
-            if (line_array[ind].xored == true || i == ind) continue;
-            int ham = 0;
-            for (unsigned js = 0; js < lineSize/2; js++) {
-               uint16_t temp2 = line_array[ind].segs2[js] ^ line_array[i].segs2[js];
-               ham += countSetBits(temp2);
-               // printf("temp2=%" PRIu16 " ham=%d\n", temp2, ham);
-            }
-            // printf("i=%d, ham[%d]=%d\n", i, ind, ham);
-            // exit(1);
-            if (ham > max_ham) {
-               max_ham = ham;
-               best_cand_ind = ind;
-            }
-         }
-         // printf("i=%d,max ham[%d]=%d\n", i, best_cand_ind, max_ham);
-         
-         for (unsigned js = 0; js < lineSize/2; js++) {
-            uint16_t temp2 = line_array[best_cand_ind].segs2[js] ^ line_array[i].segs2[js];
-            line_array[best_cand_ind].segs2[js] = temp2;
-            line_array[i].segs2[js] = temp2;
-         }
-         line_array[best_cand_ind].xored = true;
-         line_array[best_cand_ind].inter_vanish = true;
-         line_array[i].xored = true;
-         xor_ct += 2;
-      }
       else {
          assert(false);
       }
    }
+}
+
+float ShannonEntropy(struct Line* line_array, unsigned numLine, unsigned lineSize){
+    float entropy=0;
+    std::map<int,long> counts;
+    typename std::map<int,long>::iterator it;
+    unsigned base=2;
+    unsigned num = lineSize/base;
+    unsigned tot = 0;
+    //
+    for (int i = 0; i < numLine; ++i) {
+      if (line_array[i].inter_vanish) continue;
+      tot += 1;
+      int id_ind = i;
+      for (unsigned j = 0; j < i; j++) {
+         if (line_array[j].inter_vanish) continue;
+        bool equal = true;
+        //check equal
+        for (unsigned js = 0; js < num; js++) {
+            if (line_array[i].segs2[js] != line_array[j].segs2[js]) {
+                // i j not equal
+                equal = false;
+                break;
+            }
+        }
+        if (equal == true) {
+         id_ind = j;
+         break;
+        }
+      }
+      counts[id_ind]++;
+    }
+    printf("tot#line(line)=%d\n", tot);
+    it = counts.begin();
+    while(it != counts.end()){
+      // if (it->second != 0) printf("(%d,%ld)\n", it->first,it->second);
+      float p_x = (float)it->second/(tot);
+      // printf("%f\n", p_x);
+      if (p_x>0) entropy-=p_x*log(p_x)/log(2);
+      it++;
+    }
+    return entropy;
+}
+float ShannonEntropy_bit(struct Line* line_array, unsigned numLine, unsigned lineSize){
+    float entropy=0;
+    std::map<int,unsigned long> counts;
+    typename std::map<int,unsigned long>::iterator it;
+    unsigned base=2;
+    unsigned num = lineSize/base;
+    unsigned long num1 = 0;
+    unsigned tot = 0;
+    //
+    for (int i = 0; i < numLine; ++i) {
+      if (line_array[i].inter_vanish) continue;
+      tot += 1;
+        for (unsigned js = 0; js < num; js++) {
+            num1 += countSetBits(line_array[i].segs2[js]);
+        }
+    }
+    counts[1] = num1;
+    counts[0] = lineSize * tot * 8 - num1;
+    printf("tot#line (bit)=%d\n", tot);
+    //
+    it = counts.begin();
+    while(it != counts.end()){
+      // if (it->second != 0) printf("(%d,%ld)\n", it->first,it->second);
+      float p_x = (float)it->second/(tot*lineSize*8);
+      printf("[%d]:%f\n", it->first, p_x);
+      if (p_x>0) entropy-=p_x*log(p_x)/log(2);
+      it++;
+    }
+    return entropy;
 }
 
 int main(int argc, char *argv[]) {
@@ -236,9 +249,6 @@ int main(int argc, char *argv[]) {
    }
    else if (!strcmp(argv[2], "none")) {
       do_xor = 0;
-   }
-   else if (!strcmp(argv[2], "worst")) {
-      do_xor = 3;
    }
    else {
       printf("unknow doxor option: %s\n", argv[2]);
@@ -271,39 +281,24 @@ int main(int argc, char *argv[]) {
    }
    struct Line* line_array = (Line*) malloc(numLine * sizeof(struct Line));
    
-   if (do_xor == 1 || do_xor == 2 || do_xor == 3) {
-      init_line_data(line_array, lineSize, p, numLine);
-      // xor preprocess
+   init_line_data(line_array, lineSize, p, numLine);
+   float entropy_before = ShannonEntropy(line_array, numLine, lineSize);
+   float entropy_before_bit = ShannonEntropy_bit(line_array, numLine, lineSize);
+   float entropy_after = -1;
+   float entropy_after_bit = -1;
+
+   if (do_xor == 1 || do_xor == 2) {
       xor_preprocess_unconstrained(line_array, lineSize, p, numLine, 
          do_xor);
-      // dedup compression
-      dedup(line_array, lineSize, p, numLine);
-   }
-   else {
-      // no need to read tag files
-      init_line_data(line_array, lineSize, p, numLine);
-      dedup(line_array, lineSize, p, numLine);
+      entropy_after = ShannonEntropy(line_array, numLine, lineSize);
+      entropy_after_bit = ShannonEntropy_bit(line_array, numLine, lineSize);
    }
    
    // for every line:print
-   unsigned tot_size = 0;
-   unsigned inter_gain = 0;
-   for(unsigned i = 0; i < numLine; i++) {
-      tot_size += line_array[i].dedup_size;
-      if (line_array[i].inter_vanish) inter_gain += line_array[i].dedup_size;
+   printf("line_entropy_before=(%f), bit_entropy_before={%f}\n", entropy_before, entropy_before_bit);
+   if (do_xor == 1 || do_xor == 2) {
+      printf("line_entropy_after=[%f], bit_entropy_after=|%f|\n", entropy_after, entropy_after_bit);
    }
-   
-   if (do_xor != 0) {
-      double cr = (double)(numLine*lineSize)/tot_size/2;
-      printf("total size = %d/%d/2 (%f)\n", tot_size, numLine*lineSize, cr);
-   }
-   else {
-      double cr = (double)(numLine*lineSize)/tot_size;
-      printf("total size = %d/%d (%f)\n", tot_size, numLine*lineSize, cr);
-   }
-   
-   double cr_both = (double)(numLine*lineSize)/(tot_size-inter_gain);
-   printf("intra+inter = %d/%d  {%f}\n", tot_size-inter_gain, numLine*lineSize, cr_both);
 
    // free up mem
    free(p);

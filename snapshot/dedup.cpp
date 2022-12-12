@@ -246,6 +246,40 @@ void xor_preprocess(struct Line* line_array, unsigned lineSize,
             line_array[i].xored = true;
             xor_ct += 2;
          }
+         else if (do_xor == 3) {
+            // ideal xor
+            int max_ham = -1;
+            unsigned best_cand_ind = numLine + 1;
+            for (unsigned ind = 0; ind < numLine; ind++) {
+               if (line_array[ind].cachedAbove == true ||
+                  line_array[ind].xored == true ||
+                  i == ind) continue;
+               int ham = 0;
+               for (unsigned js = 0; js < lineSize/2; js++) {
+                  uint16_t temp2 = line_array[ind].segs2[js] ^ line_array[i].segs2[js];
+                  ham += countSetBits(temp2);
+                  // printf("temp2=%" PRIu16 " ham=%d\n", temp2, ham);
+               }
+               // printf("i=%d, ham[%d]=%d\n", i, ind, ham);
+               // exit(1);
+               if (ham > max_ham) {
+                  max_ham = ham;
+                  best_cand_ind = ind;
+               }
+            }
+            // printf("i=%d,min ham[%d]=%d\n", i, best_cand_ind, min_ham);
+            
+            for (unsigned js = 0; js < lineSize/2; js++) {
+               uint16_t temp2 = line_array[best_cand_ind].segs2[js] ^ line_array[i].segs2[js];
+               line_array[best_cand_ind].segs2[js] = temp2;
+               line_array[i].segs2[js] = temp2;
+            }
+            line_array[best_cand_ind].xored = true;
+            line_array[best_cand_ind].inter_vanish = false;
+            line_array[i].xored = true;
+            xor_ct += 2;
+         }
+         
          else {
             assert(false);
          }
@@ -268,6 +302,9 @@ int main(int argc, char *argv[]) {
    }
    else if (!strcmp(argv[2], "none")) {
       do_xor = 0;
+   }
+   else if (!strcmp(argv[2], "worst")) {
+      do_xor = 3;
    }
    else {
       printf("unknow doxor option: %s\n", argv[2]);
@@ -312,7 +349,7 @@ int main(int argc, char *argv[]) {
    uint64_t * p_l2_tag;
    uint64_t * p_l1i_tag;
    uint64_t * p_l1d_tag;
-   if (do_xor == 1 || do_xor == 2) {
+   if (do_xor == 1 || do_xor == 2 || do_xor == 3) {
       // read l2 tag
       FILE *fp_l2_tag;
       fp_l2_tag = fopen(filename_l2, "r");
@@ -378,14 +415,20 @@ int main(int argc, char *argv[]) {
       tot_size += line_array[i].dedup_size;
       if (line_array[i].inter_vanish) inter_gain += line_array[i].dedup_size;
    }
-   double cr = (double)(numLine*lineSize)/tot_size;
-   printf("total size = %d/%d (%f)\n", tot_size, numLine*lineSize, cr);
+   if (do_xor != 0) {
+      double cr = (double)(numLine*lineSize)/tot_size/2;
+      printf("total size = %d/%d/2 (%f)\n", tot_size, numLine*lineSize, cr);
+   }
+   else {
+      double cr = (double)(numLine*lineSize)/tot_size;
+      printf("total size = %d/%d (%f)\n", tot_size, numLine*lineSize, cr);
+   }
    double cr_both = (double)(numLine*lineSize)/(tot_size-inter_gain);
    printf("intra+inter = %d/%d  {%f}\n", tot_size-inter_gain, numLine*lineSize, cr_both);
 
    // free up mem
    free(p);
-   if (do_xor == 1 || do_xor == 2) {
+   if (do_xor == 1 || do_xor == 2 || do_xor == 3) {
       free(p_l2_tag);
       free(p_l1i_tag);
       free(p_l1d_tag);

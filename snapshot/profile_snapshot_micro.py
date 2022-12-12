@@ -17,6 +17,12 @@ parser.add_argument(
     required=True,
     help="dir that contains cache dump",
 )
+parser.add_argument(
+    "--name",
+    type=str,
+    required=True,
+    help="name to write",
+)
 args = parser.parse_args()
 
 result_dir = args.dir
@@ -30,8 +36,8 @@ create_folder(out_dir)
 create_folder(err_dir)
 create_folder(log_dir)
 
-f_time_pf = open(log_dir+f"/micro.time", "w+")
-f_time_pf_both = open(log_dir+f"/micro.time_both", "w+")
+f_time_pf = open(log_dir+f"/{args.name}.time", "w+")
+f_time_pf_both = open(log_dir+f"/{args.name}.time_both", "w+")
 
 for scheme in tqdm(["bdi", "dedup", "bdiuc", "dedupuc"], desc="compression scheme", leave=True):
     # check binary exists
@@ -47,7 +53,7 @@ for scheme in tqdm(["bdi", "dedup", "bdiuc", "dedupuc"], desc="compression schem
             continue
         cmd_list = [f"./{scheme}"] + [data_file] + [xor_scheme]
         p = subprocess.Popen(cmd_list, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print(bcolors.OKGREEN + f'micro Launched:  ' + bcolors.ENDC + f"{scheme}+{xor_scheme}")
+        print(bcolors.OKGREEN + f'{args.name} Launched:  ' + bcolors.ENDC + f"{scheme}+{xor_scheme}")
         print(f'{p.args}')
         out,err = p.communicate()
         out = out.decode('utf-8')
@@ -55,7 +61,7 @@ for scheme in tqdm(["bdi", "dedup", "bdiuc", "dedupuc"], desc="compression schem
         print(out)
         if err: 
             print(bcolors.RED + err + bcolors.ENDC)
-            ferr = open(f"err/micro.{scheme}_{xor_scheme}","w")
+            ferr = open(f"err/{args.name}.{scheme}_{xor_scheme}","w")
             ferr.write(err)
             ferr.write(f'{p.args}')
             ferr.close()
@@ -71,13 +77,13 @@ for scheme in tqdm(["bdi", "dedup", "bdiuc", "dedupuc"], desc="compression schem
         print(f"total {len(cr)} snapshots.")
 
         # write means and #snapshots to output
-        f = open(out_dir+f"/micro.{scheme}_{xor_scheme}", "w")
+        f = open(out_dir+f"/{args.name}.{scheme}_{xor_scheme}", "w")
         f.write(f"{cr_arith}, {cr_geo}, {len(cr)}")
         f.close()
 
         cr_arith_both = sum(cr_both)/len(cr_both)
         cr_geo_both = gmean(cr_both)
-        f_both = open(out_dir+f"/micro.{scheme}_{xor_scheme}_both", "w")
+        f_both = open(out_dir+f"/{args.name}.{scheme}_{xor_scheme}_both", "w")
         f_both.write(f"{cr_arith_both}, {cr_geo_both}, {len(cr_both)}")
         f_both.close()
 

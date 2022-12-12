@@ -554,6 +554,51 @@ void xor_preprocess(struct Line* line_array, unsigned lineSize,
             line_array[i].xored = true;
             xor_ct += 2;
          }
+         else if (do_xor == 3) {
+            // worst xor
+            int max_ham = -1;
+            unsigned best_cand_ind = numLine + 1;
+            for (unsigned ind = 0; ind < numLine; ind++) {
+               if (line_array[ind].cachedAbove == true ||
+                  line_array[ind].xored == true ||
+                  i == ind) continue;
+               int ham = 0;
+               for (unsigned js = 0; js < lineSize/8; js++) {
+                  uint64_t temp8 = line_array[ind].segs8[js] ^ line_array[i].segs8[js];
+                  ham += countSetBits(temp8);
+                  // printf("temp8=%" PRIu64 " ham=%d\n", temp8, ham);
+               }
+               // printf("i=%d, ham[%d]=%d\n", i, ind, ham);
+               // exit(1);
+               if (ham > max_ham) {
+                  max_ham = ham;
+                  best_cand_ind = ind;
+               }               
+            }
+            // printf("i=%d,min ham[%d]=%d\n", i, best_cand_ind, min_ham);
+            
+            for (unsigned js = 0; js < lineSize/8; js++) {
+               uint64_t temp8 = line_array[best_cand_ind].segs8[js] ^ line_array[i].segs8[js];
+               line_array[best_cand_ind].segs8[js] = temp8;
+               line_array[i].segs8[js] = temp8;
+               // printf("%" PRIu32 "\n", temp8);
+            }
+            for (unsigned js = 0; js < lineSize/4; js++) {
+               uint32_t temp4 = line_array[best_cand_ind].segs4[js] ^ line_array[i].segs4[js];
+               line_array[best_cand_ind].segs4[js] = temp4;
+               line_array[i].segs4[js] = temp4;
+            }
+            for (unsigned js = 0; js < lineSize/2; js++) {
+               uint16_t temp2 = line_array[best_cand_ind].segs2[js] ^ line_array[i].segs2[js];
+               line_array[best_cand_ind].segs2[js] = temp2;
+               line_array[i].segs2[js] = temp2;
+            }
+            line_array[best_cand_ind].xored = true;
+            line_array[best_cand_ind].inter_vanish = true;
+            line_array[i].xored = true;
+            xor_ct += 2;
+         }
+         
          else {
             assert(false);
          }
@@ -576,6 +621,9 @@ int main(int argc, char *argv[]) {
    }
    else if (!strcmp(argv[2], "none")) {
       do_xor = 0;
+   }
+   else if (!strcmp(argv[2], "worst")) {
+      do_xor = 3;
    }
    else {
       printf("unknow doxor option: %s\n", argv[2]);
@@ -620,7 +668,7 @@ int main(int argc, char *argv[]) {
    uint64_t * p_l2_tag;
    uint64_t * p_l1i_tag;
    uint64_t * p_l1d_tag;
-   if (do_xor == 1 || do_xor == 2) {
+   if (do_xor == 1 || do_xor == 2 || do_xor == 3) {
       // read l2 tag
       FILE *fp_l2_tag;
       fp_l2_tag = fopen(filename_l2, "r");
@@ -703,7 +751,7 @@ int main(int argc, char *argv[]) {
 
    // free up mem
    free(p);
-   if (do_xor == 1 || do_xor == 2) {
+   if (do_xor == 1 || do_xor == 2 || do_xor == 3) {
       free(p_l2_tag);
       free(p_l1i_tag);
       free(p_l1d_tag);

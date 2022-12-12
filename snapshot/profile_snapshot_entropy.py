@@ -25,10 +25,7 @@ yml_file = "../util/spec2017_default.yml"
 spec2017 = yaml_load(yml_file)
 bench_name = spec2017[args.bench_num]["name"]
 ckpt = gem5_dir + f"/ckpt/spec2017/1c-2GB-valgrind/{args.bench_num}.{bench_name}"
-# ckpt_dir=$(find ${ckpt} -mindepth 1 -maxdepth 1 -type d -name "${spec_bench_num}*")
-# echo "ckpt dir is ${ckpt_dir}"
-# num_simpoint=$(find ${ckpt_dir} -mindepth 1 -maxdepth 1 -type d | wc -l)
-# echo "number of simpoints: ${num_simpoint}"
+
 from glob import glob
 num_ckpt = len(glob(os.path.join(ckpt, "cpt.*", "")))
 print(f"spec {args.bench_num}.{bench_name} contains {num_ckpt} ckpts.")
@@ -37,25 +34,22 @@ print(f"spec {args.bench_num}.{bench_name} contains {num_ckpt} ckpts.")
 result_dir = "/m5out_spec_dump_cache_2_to_1"
 unit = 10000000
 num_sample = 10
-out_dir = os.getcwd() + '/out/'
-log_dir = os.getcwd() + '/log/'
-err_dir = os.getcwd() + '/err/'
+out_dir = os.getcwd() + '/out_entropy/'
+log_dir = os.getcwd() + '/log_entropy/'
+err_dir = os.getcwd() + '/err_entropy/'
 create_folder(out_dir)
 create_folder(err_dir)
 create_folder(log_dir)
 
-f_time_pf = open(log_dir+f"/{bench_name}.time", "w+")
-f_time_pf_both = open(log_dir+f"/{bench_name}.time_both", "w+")
-
-for scheme in tqdm(["bdi", "dedup", "bdiuc", "dedupuc"], desc="compression scheme", leave=True):
+for scheme in ['entropy']:
     # check binary exists
     if not os.path.isfile(f"{scheme}"): 
         print(bcolors.RED + f"{scheme} binary file not exist!" + bcolors.ENDC)
         exit(1)
     num_snapshots=[]
-    for xor_scheme in tqdm(["none", "worst", "rand", "ideal"], desc="xor scheme", leave=False):
-        cr = []
-        cr_both =[]
+    for xor_scheme in tqdm(["none", "rand", "ideal"], desc="xor scheme", leave=False):
+        line = []
+        bit = []
         for no_ckpt in tqdm(range(num_ckpt), desc="check point", leave=False):
             for i in range(num_sample):
                 i = i + 1
@@ -78,35 +72,30 @@ for scheme in tqdm(["bdi", "dedup", "bdiuc", "dedupuc"], desc="compression schem
                     ferr.write(f'{p.args}')
                     ferr.close()
                 else:
-                    cr_ = float(out.split('(')[-1].split(')')[0])
-                    cr_both_ = float(out.split('{')[-1].split('}')[0])
-                    print(cr_)
-                    cr.append(cr_)
-                    cr_both.append(cr_both_)
+                    if xor_scheme == 'none':
+                        line_ = float(out.split('(')[-1].split(')')[0])
+                        line.append(line_)
+                        bit_ = float(out.split('{')[-1].split('}')[0])
+                        bit.append(bit_)
+                    elif xor_scheme == 'rand' or xor_scheme == 'ideal':
+                        line_ = float(out.split('[')[-1].split(']')[0])
+                        line.append(line_)
+                        bit_ = float(out.split('|')[1])
+                        bit.append(bit_)
+                    else: assert False
+
             # exit(1)
-        cr_arith = sum(cr)/len(cr)
-        cr_geo = gmean(cr)
-        num_snapshots.append(len(cr))
-        print(f"total {len(cr)} snapshots.")
+        line_arith = sum(line)/len(line)
+        line_geo = gmean(line)
+        bit_arith = sum(bit)/len(bit)
+        bit_geo = gmean(bit)
+        num_snapshots.append(len(line))
+        print(f"total {len(line)} snapshots.")
 
         # write means and #snapshots to output
         f = open(out_dir+f"/{bench_name}.{scheme}_{xor_scheme}", "w")
-        f.write(f"{cr_arith}, {cr_geo}, {len(cr)}")
+        f.write(f"{line_arith}, {line_geo}, {bit_arith}, {bit_geo}, {len(line)}")
         f.close()
 
-        cr_arith_both = sum(cr_both)/len(cr_both)
-        cr_geo_both = gmean(cr_both)
-        f_both = open(out_dir+f"/{bench_name}.{scheme}_{xor_scheme}_both", "w")
-        f_both.write(f"{cr_arith_both}, {cr_geo_both}, {len(cr_both)}")
-        f_both.close()
-
-        # write time elaps profile to log
-        for i in range(len(cr)): f_time_pf.write(f"{cr[i]} ")
-        f_time_pf.write("\n")
-        for i in range(len(cr_both)): f_time_pf_both.write(f"{cr_both[i]} ")
-        f_time_pf_both.write("\n")
 
     print(num_snapshots)
-
-f_time_pf.close()
-f_time_pf_both.close()
